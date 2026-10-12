@@ -1,0 +1,36 @@
+---
+title: "Local AI Websites: source search"
+format: html
+filters:
+  - local-ai-websites
+---
+
+This deliberately synthetic page remains useful without a model. Two uses of
+"action" have separate identities and source destinations.
+
+::: {#math-group-action .local-ai-source data-source-label="Mathematics: group action"}
+## Group action
+
+A group action assigns a transformation to each group element. The identity
+acts as the identity transformation, and composition respects multiplication.
+This definition concerns algebra, not an educational research method.
+:::
+
+::: {#education-action-research .local-ai-source data-source-label="Education: action research"}
+## Action research
+
+Action research is an inquiry approach in which practitioners investigate and
+reflect on changes to their practice. It does not assert a group action.
+:::
+
+::: {#evidence .local-ai-source data-source-label="Evidence and generated proposals"}
+## Evidence and review
+
+A generated proposal is unreviewed. A source reference identifies material to
+inspect; it does not prove that the material supports every generated claim.
+An absence of search results does not establish that a proposition is false.
+:::
+
+::: {.local-ai}
+Search these sources by a term or source identity. Read the original source for context.
+:::

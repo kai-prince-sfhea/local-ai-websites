@@ -1,0 +1,19 @@
+/* Copyright 2026 Kai Prince. SPDX-License-Identifier: Apache-2.0 */
+.local-ai-enhancement { margin-block: 1rem; padding: 1rem; border: 1px solid currentColor; border-radius: .25rem; }
+.local-ai-enhancement[hidden], .local-ai-enhancement [hidden] { display: none !important; }
+.local-ai-search, .local-ai-actions { display: flex; flex-wrap: wrap; align-items: end; gap: .65rem; }
+.local-ai-search label { display: flex; flex: 1 1 16rem; flex-direction: column; gap: .3rem; }
+.local-ai-search input { width: 100%; min-width: 0; padding: .4rem; color: inherit; background: inherit; border: 1px solid currentColor; }
+.local-ai-enhancement button { padding: .4rem .65rem; font: inherit; color: inherit; background: inherit; border: 1px solid currentColor; border-radius: .2rem; }
+.local-ai-enhancement button:disabled { opacity: .65; }
+.local-ai-enhancement :focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
+.local-ai-status { margin-block: .8rem; }
+.local-ai-results li { margin-block: .75rem; }
+.local-ai-results p { margin-block: .2rem; overflow-wrap: anywhere; }
+.local-ai-consent { margin-block: 1rem; padding: .8rem; border: 2px solid currentColor; }
+.local-ai-consent label { display: block; margin-block: .5rem; }
+.local-ai-proposal { margin-block: 1rem; padding: .8rem; border-inline-start: .3rem solid currentColor; }
+.local-ai-proposal-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.local-ai-proposal pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 20rem; overflow-y: auto; }
+@media print { .local-ai-enhancement { display: none !important; } }
+@media (forced-colors: active) { .local-ai-enhancement, .local-ai-enhancement button, .local-ai-search input { border-color: CanvasText; } }

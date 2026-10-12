@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Local AI Websites options",
+  "type": "object",
+  "description": "Explicit enabled:false is a complete no-op, including stale options. Active options are validated strictly.",
+  "anyOf": [
+    {"required": ["enabled"], "properties": {"enabled": {"const": false}}},
+    {"additionalProperties": false, "properties": {
+      "enabled": {"const": true, "default": true},
+      "manifest": {"type": "string", "maxLength": 2048, "description": "Explicit public JSON file, at most 262144 bytes, copied automatically for HTML panels. A relative URL resolves beside the input document; a /root-relative path resolves within the Quarto rendering context (project root, or input directory for a standalone document) and becomes a document-relative output URL, preserving site subpaths. Symbolic links, query, fragment, percent escapes, backslashes, whitespace and authored traversal are refused. Corrupted Quarto Unicode path values fail safely; the tested Windows locale requires an ASCII consumer/output directory for manifest publication. SDK, WASM and model assets require an exact author resources inventory; no directory is recursively copied. Omit for static search only."}
+    }}
+  ]
+}

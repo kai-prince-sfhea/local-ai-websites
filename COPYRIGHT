@@ -1,0 +1,9 @@
+Copyright 2026 Kai Prince.
+
+Original Local AI Websites extension code is licensed under the Apache License,
+Version 2.0. See LICENSE. This grant does not license consumer-authored content,
+models, third-party SDKs, WASM runtimes or other deployment inputs.
+
+OpenAI Codex materially assisted research, implementation, tests and documentation
+under the author's direction. Independent rights, semantic and accessibility
+review remain separate from automated verification.
