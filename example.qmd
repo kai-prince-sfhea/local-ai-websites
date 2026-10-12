@@ -2,7 +2,7 @@
 title: "Local AI Websites: source search"
 format: html
 filters:
-  - local-ai-websites
+  - kai-prince-sfhea/local-ai-websites
 ---
 
 This deliberately synthetic page remains useful without a model. Two uses of

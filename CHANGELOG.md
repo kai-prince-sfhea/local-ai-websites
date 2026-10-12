@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.0.3 — local development candidate — 12 October 2026
+## 0.0.3 — experimental source — 12 October 2026
+
+- Publish the experimental source with GitHub installation/update/removal guidance, an owner-qualified example and optional preparer paths, while retaining a documented local-source alternative and material AI/evidence-availability disclosures.
 
 - Document the experimental version/migration policy, material Codex assistance and availability limits for developer tests/evidence excluded from the public source package. No authoring or manifest migration is required from 0.0.2.
 - Reject missing or malformed embedding input/chunk/truncation metadata before accepting a vector, preserving the pinned single-chunk, no-truncation profile.

@@ -2,36 +2,53 @@
 
 An experimental Quarto extension for source search and optional browser-local assistance. Reviewed page content remains readable and searchable without a model. The selected model defaults are **EmbeddingGemma 2**, with text-only 768-dimensional retrieval, and **Gemma 4 E2B** for generated proposals.
 
-Version **0.0.3** is a local development candidate requiring **Quarto 1.11.5 or later**. Development uses the Windows pre-release. There is no public GitHub installation route yet. No model weights, SDK bundle or WASM binaries are included. A bounded actual EmbeddingGemma 2 smoke test passed in one Codex in-app browser with AMD RDNA-3 WebGPU over secure loopback HTTP: semantic discovery on three synthetic sources, loading, cancellation/recovery, release/reset and ordinary source search. This does not establish independent retrieval quality, memory/latency support, network-egress assurance, citation support, mathematical fidelity, accessibility conformance or production deployment acceptance.
+Version **0.0.3** is experimental source requiring **Quarto 1.11.5 or later**. Development uses the Windows pre-release. The repository publishes source; it does not establish a supported release or production deployment. No model weights, SDK bundle or WASM binaries are included. A bounded actual EmbeddingGemma 2 smoke test passed in one Codex in-app browser with AMD RDNA-3 WebGPU over secure loopback HTTP: semantic discovery on three synthetic sources, loading, cancellation/recovery, release/reset and ordinary source search. This does not establish independent retrieval quality, memory/latency support, network-egress assurance, citation support, mathematical fidelity, accessibility conformance or production deployment acceptance.
 
-## Try the local source
+## Install from GitHub
 
-Keep this folder next to a separate consumer folder. Copy `example.qmd` into the consumer, then run there:
+Copy [example.qmd](example.qmd) into a separate consumer folder, then run there:
 
 ```sh
-quarto add ../local-ai-websites --no-prompt
+quarto add kai-prince-sfhea/local-ai-websites --no-prompt
 quarto list extensions
 quarto render example.qmd
 ```
 
-The example selects the installed filter. This workflow requires Quarto only. Node.js and npm are needed only if you choose to prepare the optional model assets below.
+The example selects `kai-prince-sfhea/local-ai-websites`, matching the GitHub installation namespace. This workflow requires Quarto only. Node.js and npm are needed only if you choose to prepare the optional model assets below. The default installation follows the experimental `main` branch; no supported tagged release is promised.
 
 In the current Windows Quarto 1.11.5/Pandoc 3.10 environment, optional manifest publication requires an ASCII project-root filesystem path; spaces are allowed. Upstream path APIs misreport accented roots, and CJK consumer paths can fail Quarto's absolute extension-path loading before extension code starts. Unicode page content and source IDs are supported separately.
 
-To update an existing local installation from this source folder, run:
+To update an existing GitHub installation, run:
 
 ```sh
-quarto update extension ../local-ai-websites --no-prompt
+quarto update extension kai-prince-sfhea/local-ai-websites --no-prompt
 quarto list extensions
 ```
 
-Remove `local-ai-websites` from the page/project `filters` list before removing the installed extension:
+Remove `kai-prince-sfhea/local-ai-websites` from the page/project `filters` list before removing the installed extension:
 
 ```sh
-quarto remove local-ai-websites --no-prompt
+quarto remove kai-prince-sfhea/local-ai-websites --no-prompt
 ```
 
 To keep it installed but inactive, use `local-ai.enabled: false` as shown below.
+
+### Local source alternative
+
+Keep a local checkout of this repository next to the consumer folder. Install from the consumer:
+
+```sh
+quarto add ../local-ai-websites --no-prompt
+```
+
+Local installation uses a different namespace. Change the copied example and the filter configuration below to:
+
+```yaml
+filters:
+  - local-ai-websites
+```
+
+For the local installation, the optional preparation tool is `_extensions/local-ai-websites/prepare-assets.mjs`. Update with `quarto update extension ../local-ai-websites --no-prompt`; after removing the local filter selector, remove with `quarto remove local-ai-websites --no-prompt`. The remaining examples use the GitHub installation paths.
 
 ### Versions and migration
 
@@ -58,7 +75,7 @@ Enable the filter in a page or project:
 
 ```yaml
 filters:
-  - local-ai-websites
+  - kai-prince-sfhea/local-ai-websites
 ```
 
 Mark already-public source blocks with unique native IDs and insert one panel:
@@ -107,10 +124,10 @@ The adapter requires **LiteRT-LM 0.18.0**, **wasm-utils 2.0.0**, a secure HTTP(S
 3. From the consumer project, prepare a **new** asset directory. Substitute your existing local model path:
 
    ```sh
-   node _extensions/local-ai-websites/prepare-assets.mjs --packages ../local-ai-tools --embedding C:/Models/embeddinggemma-2-text-270m.litertlm --output ./local-ai-assets
+   node _extensions/kai-prince-sfhea/local-ai-websites/prepare-assets.mjs --packages ../local-ai-tools --embedding C:/Models/embeddinggemma-2-text-270m.litertlm --output ./local-ai-assets
    ```
 
-   The installed path above matches the local `quarto add` workflow. The command refuses an existing output directory, linked paths, wrong models, altered WASM bytes and incompatible package identities. It bundles the SDK, preserves source notices, copies all eight feature-selected WASM files, verifies copied model bytes and writes `models.json` last. On failure it removes only its own partial output. It does not overwrite an earlier usable deployment. Run `node _extensions/local-ai-websites/prepare-assets.mjs --help` for the supported arguments.
+   The installed path above matches the GitHub `quarto add` workflow. The command refuses an existing output directory, linked paths, wrong models, altered WASM bytes and incompatible package identities. It bundles the SDK, preserves source notices, copies all eight feature-selected WASM files, verifies copied model bytes and writes `models.json` last. On failure it removes only its own partial output. It does not overwrite an earlier usable deployment. Run `node _extensions/kai-prince-sfhea/local-ai-websites/prepare-assets.mjs --help` for the supported arguments.
 
 4. Configure the manifest and explicitly publish the generated runtime files in `_quarto.yml`. Merge this website example into your existing project configuration, preserving its project type and other settings. This complete file list applies to the embedding-only command above:
 
@@ -177,6 +194,6 @@ The 0.0.3 development checks passed 43 synthetic unit/protocol/UI groups, nine p
 
 Developer tests, fixtures, benchmarks, raw receipts and planning documents are intentionally kept outside this lean source distribution. They are not included or publicly available in this folder, so this checkout alone cannot reproduce the full internal suite or its benchmark measurements. The local installation and `example.qmd` workflow above can be reproduced using the distributed files; optional inference additionally requires the separately acquired, licensed runtime/model assets. The full developer workspace and retained evidence require separate availability before an external reviewer can reproduce those internal checks.
 
-Use public or synthetic evaluation content. Treat page scripts and configured runtime assets as trusted code. Do not post confidential data, prompts or credentials in public issue reports; a public reporting route will be added only when a repository exists.
+Use public or synthetic evaluation content. Treat page scripts and configured runtime assets as trusted code. Report reproducible, non-sensitive problems through [GitHub Issues](https://github.com/kai-prince-sfhea/local-ai-websites/issues). Do not post confidential data, prompts, credentials or unmitigated vulnerability details in public issues. No dedicated confidential security-reporting channel is currently advertised.
 
 Official references: [Quarto extension creation](https://quarto.org/docs/extensions/creating.html), [LiteRT-LM JavaScript](https://developers.google.com/edge/litert-lm/js), [embedding runtime](https://developers.google.com/edge/litert-lm/embedding_models), [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2).
