@@ -30,7 +30,7 @@ local function config(meta)
       if path:find('%s') or path:find('//', 1, true) then fail('manifest cannot contain whitespace or empty path components') end
       for part in path:gmatch('[^/]+') do if part == '.' or part == '..' then fail('manifest path cannot traverse directories') end end
       result.manifest = path
-    else fail('unknown option ' .. tostring(key)) end
+    else fail('local-ai has an unknown option; remove unsupported keys and use only enabled or manifest') end
   end
   return result
 end
@@ -107,7 +107,7 @@ local function process(doc)
     if has(el,'local-ai') then fail('a panel cannot also be a source') end
     if not id or id=='' or #id>256 or id:find('[%s"\'<>#]') or id:find('%c') then fail('each source requires a bounded native anchor without whitespace or unsafe delimiters') end
     -- Native block boundaries must not join a heading's last word to prose.
-    local body=text(pandoc.utils.blocks_to_inlines(el.content,{pandoc.Space()}),'source #' .. id,12000)
+    local body=text(pandoc.utils.blocks_to_inlines(el.content,{pandoc.Space()}),'source occurrence ' .. (#sources+1) .. '.text',12000)
     local label=el.attributes['data-source-label'] and text(el.attributes['data-source-label'],'source label',256) or id
     total=total+#body
     if #sources>=100 or total>120000 then fail('page source budget exceeded: at most 100 sources and 120000 UTF-8 bytes') end
@@ -115,7 +115,7 @@ local function process(doc)
   end
   doc:walk({Div=visit,Span=visit,Header=visit,Code=visit,CodeBlock=visit,Link=visit,Image=visit,Table=visit,Figure=visit})
   if #panels>1 then fail('at most one .local-ai panel is supported per document') end
-  for _,source in ipairs(sources) do if anchors[source.id]~=1 then fail('source anchor #' .. source.id .. ' is duplicated in native content') end end
+  for index,source in ipairs(sources) do if anchors[source.id]~=1 then fail('source occurrence ' .. index .. '.id is duplicated in native content; assign a unique native ID') end end
   if #panels==0 then return doc end
   local items={}
   for _,source in ipairs(sources) do items[#items+1]={pandoc.Plain({pandoc.Link({pandoc.Str(source.label)},source.url)})} end
@@ -136,7 +136,7 @@ local function process(doc)
     return el
   end})
   if html then
-    quarto.doc.add_html_dependency({name='local-ai-websites',version='0.0.3',
+    quarto.doc.add_html_dependency({name='local-ai-websites',version='0.0.4',
       scripts={{path='local-ai-websites.js',attribs={type='module'}}},stylesheets={'local-ai-websites.css'},
       resources={'retrieval.js','runtime.js','runtime-worker.js','runtime-worker-bootstrap.js','manifest.js'}})
   end

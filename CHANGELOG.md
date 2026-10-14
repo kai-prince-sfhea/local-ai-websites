@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.4 — diagnostic privacy follow-up — 14 October 2026
+
+- Refuse unknown metadata keys and duplicate/invalid source text without echoing
+  authored keys or source IDs. Diagnostic source occurrences are processing
+  ordinals, not source line numbers; ordinary Quarto logs remain author material.
+- Retain the existing authoring, model identities, session lifecycle and optional
+  acquisition/deployment contracts. No model/index migration is required.
+
 ## 0.0.3 — experimental source — 12 October 2026
 
 - Publish the experimental source with GitHub installation/update/removal guidance, an owner-qualified example and optional preparer paths, while retaining a documented local-source alternative and material AI/evidence-availability disclosures.

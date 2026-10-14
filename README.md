@@ -2,7 +2,7 @@
 
 An experimental Quarto extension for source search and optional browser-local assistance. Reviewed page content remains readable and searchable without a model. The selected model defaults are **EmbeddingGemma 2**, with text-only 768-dimensional retrieval, and **Gemma 4 E2B** for generated proposals.
 
-Version **0.0.3** is experimental source requiring **Quarto 1.11.5 or later**. Development uses the Windows pre-release. The repository publishes source; it does not establish a supported release or production deployment. No model weights, SDK bundle or WASM binaries are included. A bounded actual EmbeddingGemma 2 smoke test passed in one Codex in-app browser with AMD RDNA-3 WebGPU over secure loopback HTTP: semantic discovery on three synthetic sources, loading, cancellation/recovery, release/reset and ordinary source search. This does not establish independent retrieval quality, memory/latency support, network-egress assurance, citation support, mathematical fidelity, accessibility conformance or production deployment acceptance.
+Version **0.0.4** is experimental source requiring **Quarto 1.11.5 or later**. Development uses the Windows pre-release. The repository publishes source; it does not establish a supported release or production deployment. No model weights, SDK bundle or WASM binaries are included. A bounded actual EmbeddingGemma 2 smoke test passed in one Codex in-app browser with AMD RDNA-3 WebGPU over secure loopback HTTP: semantic discovery on three synthetic sources, loading, cancellation/recovery, release/reset and ordinary source search. This does not establish independent retrieval quality, memory/latency support, network-egress assurance, citation support, mathematical fidelity, accessibility conformance or production deployment acceptance.
 
 ## Install from GitHub
 
@@ -54,7 +54,7 @@ For the local installation, the optional preparation tool is `_extensions/local-
 
 The `0.0.x` series is experimental and does not promise a stable configuration or runtime API. Changes to authoring, manifest versions, runtime profiles and required migrations belong in the versioned changelog. Incompatible manifest versions and unsupported fields fail validation rather than being silently converted. Review the changelog before updating; update the installed extension, re-render the consumer and reload the page to begin a fresh session.
 
-Version 0.0.3 introduces no authoring or manifest-version migration from 0.0.2. If a later update changes the SDK, model or embedding profile, prepare a new asset directory from the required pinned inputs and update the manifest and exact resource list together. Re-encode affected vectors; do not rename or relabel an old model space. Keep the earlier usable asset pack until the replacement has been checked. This extension does not provide persistent-reader-state migration because its state is session-only.
+Version 0.0.4 changes diagnostics without changing authoring, manifest versions or embedding identities; no migration is required from 0.0.3. The 0.0.3 migration note remains in the changelog. If a later update changes the SDK, model or embedding profile, prepare a new asset directory from the required pinned inputs and update the manifest and exact resource list together. Re-encode affected vectors; do not rename or relabel an old model space. Keep the earlier usable asset pack until the replacement has been checked. This extension does not provide persistent-reader-state migration because its state is session-only.
 
 ### Compatibility
 
@@ -101,9 +101,11 @@ local-ai:
   enabled: false
 ```
 
-When enabled, `local-ai` accepts only `enabled` and `manifest`; unknown options fail the render. Omit `manifest` for source search without models.
+When enabled, `local-ai` accepts only `enabled` and `manifest`; unknown options fail the render without echoing their supplied names. Source diagnostic occurrences are processing ordinals, not source line numbers. Quarto can still include authored metadata in ordinary render logs; keep those logs private. Omit `manifest` for source search without models.
 
 There is no automatic model acquisition, cloud inference, telemetry, persistent chat history, service worker or project-wide private-source indexing. Optional model loading requires an author-supplied same-origin asset manifest and an explicit reader action. Models, the SDK bundle and WASM are separate licensed deployment inputs. Browser-local execution does not establish institutional permission for restricted data.
+
+Quarto `--quiet` can suppress diagnostic text while retaining a nonzero failure status. Re-run with `--log-level error` to see the extension's safe contract message; ordinary render logs remain author material.
 
 ## Prepare optional local model assets
 
