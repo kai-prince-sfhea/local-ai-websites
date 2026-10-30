@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Kai Prince
+import {PROPOSAL_FORMAT,PROPOSAL_PROMPT,PROPOSAL_SCHEMA,QUOTE_PROPOSAL_FORMAT,
+  QUOTE_PROPOSAL_PROMPT,QUOTE_PROPOSAL_SCHEMA,QUOTE_PROPOSAL_PROFILE} from './proposal.js';
 
 export const DEFAULT_MODEL_PREFERENCES = Object.freeze({
   embed: Object.freeze({id: 'google/embeddinggemma-2', variant: 'text-270m', dimensions: 768,
@@ -121,7 +123,7 @@ export function validateManifest(input, manifestURL) {
 }
 
 export function validateGenerationRequest(input, limits = DEFAULT_LIMITS) {
-  fields(input, ['question', 'evidence', 'snapshot'], 'generation request');
+  fields(input, ['question', 'evidence', 'snapshot','outputFormat','context'], 'generation request');
   if (input.snapshot !== undefined && !sha256(input.snapshot)) throw new Error('Invalid semantic snapshot digest.');
   const question = contentText(input.question, 'question', limits.maxQuestionCharacters);
   if (!Array.isArray(input.evidence) || input.evidence.length < 1 || input.evidence.length > limits.maxEvidenceRecords)
@@ -139,7 +141,20 @@ export function validateGenerationRequest(input, limits = DEFAULT_LIMITS) {
     if (count > limits.maxEvidenceCharacters) throw new Error('Selected evidence exceeds the text budget.');
     return {id, text: sourceText, url: parsed.href};
   });
-  return {question, evidence, ...(input.snapshot === undefined ? {} : {snapshot: input.snapshot})};
+  let context;
+  if(input.outputFormat!==undefined){
+    if(![PROPOSAL_FORMAT,QUOTE_PROPOSAL_FORMAT].includes(input.outputFormat))throw new Error('Unsupported generation output format.');
+    if(input.context!==undefined){
+      fields(input.context,['graphId','snapshotId','querySha256','providerSha256','resultSha256'],'proposal context');context={};
+      for(const key of ['graphId','snapshotId','querySha256','providerSha256','resultSha256'])if(input.context[key]!==undefined){
+        const value=input.context[key];
+        if(key==='graphId'?!/^[a-z][a-z0-9-]{0,63}$/u.test(value??''):!sha256(value))throw new Error('Invalid proposal context identity.');
+        context[key]=value;
+      }
+    }
+  }else if(input.context!==undefined)throw new Error('Proposal context requires an explicit structured output format.');
+  return {question, evidence, ...(input.snapshot === undefined ? {} : {snapshot: input.snapshot}),
+    ...(input.outputFormat===undefined?{}:{outputFormat:input.outputFormat,...(context===undefined?{}:{context})})};
 }
 
 export function validateEmbeddingRequest(value, kind = 'query', context = {}) {
@@ -161,11 +176,21 @@ export async function digestJSON(value, cryptoObject = globalThis.crypto) {
     .map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
+export function generationPrompt(outputFormat) {
+  if(outputFormat===undefined)return GENERATION_PROMPT;
+  if(outputFormat===PROPOSAL_FORMAT)return GENERATION_PROMPT+'\n'+PROPOSAL_PROMPT;
+  if(outputFormat===QUOTE_PROPOSAL_FORMAT)return GENERATION_PROMPT+'\n'+QUOTE_PROPOSAL_PROMPT;
+  throw new Error('Unsupported generation output format.');
+}
+
 export async function generationIdentity(input) {
   const sources = await Promise.all(input.evidence.map(async ({id, url, text}) => ({id, url, sha256: await digestJSON({id, url, text})})));
   const snapshot = input.snapshot ?? await digestJSON(sources);
-  const querySha256 = await digestJSON(input.question), promptSha256 = await digestJSON(GENERATION_PROMPT);
-  const identity = {snapshot, querySha256, sources, ...GENERATION_PROFILE, promptSha256};
+  const structured=input.outputFormat!==undefined,quoteOnly=input.outputFormat===QUOTE_PROPOSAL_FORMAT;
+  const querySha256 = await digestJSON(input.question), promptSha256 = await digestJSON(generationPrompt(input.outputFormat));
+  const identity = {snapshot, querySha256, sources, ...GENERATION_PROFILE, promptSha256,
+    ...(structured?{outputFormat:input.outputFormat,outputSchemaSha256:await digestJSON(quoteOnly?QUOTE_PROPOSAL_SCHEMA:PROPOSAL_SCHEMA),
+      ...(quoteOnly?{outputProfileSha256:await digestJSON(QUOTE_PROPOSAL_PROFILE)}:{}),contextSha256:await digestJSON(input.context??{})}:{})};
   return {...identity, requestSha256: await digestJSON(identity)};
 }
 

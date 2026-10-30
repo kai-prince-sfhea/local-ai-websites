@@ -2,6 +2,8 @@
 // Copyright 2026 Kai Prince
 import {sameOriginURL, validateManifest, validateGenerationRequest, validateEmbeddingRequest, validateEmbedding,
   embeddingIdentity, generationIdentity, digestJSON} from './manifest.js';
+import {buildProposalRequest,validateProposalOutput,QUOTE_PROPOSAL_FORMAT} from './proposal.js';
+import {validateStorageState} from './model-store.js';
 
 const OWNER = Symbol.for('quarto.local-ai-websites.page-owner');
 const LOCK = 'quarto-local-ai-websites-runtime-v1';
@@ -43,13 +45,14 @@ export class LocalAIRuntime {
     this.onState = onState; this.fetch = fetchImpl; this.workerFactory = workerFactory;
     this.navigator = navigatorObject; this.pageScope = pageScope; this.timeoutMs = requestTimeoutMs;
     this.epoch = 0; this.sequence = 0; this.pending = null; this.worker = null; this.model = null;
-    this.busy = false; this.manifest = null; this.inspecting = null; this.releaseLock = null; this.owner = null;
+    this.busy = false; this.manifest = null; this.inspecting = null; this.releaseLock = null; this.owner = null; this.remember = false; this.storage = null;
     this.state('not-loaded');
   }
 
   state(status, details = {}) {
     this.status = status;
-    try { this.onState({status, capability: this.model?.capability ?? null, modelId: this.model?.id ?? null, ...details}); }
+    try { this.onState({status, capability: this.model?.capability ?? null, modelId: this.model?.id ?? null,
+      ...(this.storage ? {storage:this.storage} : {}), ...details}); }
     catch { /* A presentation callback cannot interrupt resource cleanup. */ }
   }
 
@@ -88,10 +91,14 @@ export class LocalAIRuntime {
     if (!granted) throw error('Local AI is busy in another tab. Release that model before retrying.');
   }
 
-  async load(capability) {
+  async load(capability, {remember = false} = {}) {
+    if (typeof remember !== 'boolean') throw error('Model storage consent must be a boolean.');
     if (!['embed', 'generate'].includes(capability)) throw error('Unknown local AI capability.');
     if (this.busy) throw error('Local AI is already busy.');
-    if (this.worker && this.model?.capability === capability && this.status === 'ready') return;
+    // Reusing a ready engine is safe only if its load already applied the newly
+    // confirmed storage policy. A false -> true choice needs a fresh verified
+    // load; unchecked loads never upgrade persistence implicitly.
+    if (this.worker && this.model?.capability === capability && this.status === 'ready' && (!remember || this.remember)) return;
     if (this.worker) this.release();
     this.busy = true; const version = this.epoch;
     const controller = new AbortController(); this.loadController = controller;
@@ -104,7 +111,7 @@ export class LocalAIRuntime {
       if (!this.navigator?.gpu?.requestAdapter) throw Object.assign(error('This device does not expose WebGPU. Source search remains available.'), {unsupported: true});
       const adapter = await abortable(this.navigator.gpu.requestAdapter(), controller.signal); this.check(version);
       if (!adapter) throw Object.assign(error('No compatible WebGPU adapter is available. Source search remains available.'), {unsupported: true});
-      await this.acquire(version, controller.signal); this.check(version); this.model = model;
+      await this.acquire(version, controller.signal); this.check(version); this.model = model; this.storage = null;
       this.state('loading', {totalBytes: model.bytes, loadedBytes: 0});
       const worker = this.workerFactory(new URL('./runtime-worker-bootstrap.js', import.meta.url));
       this.worker = worker;
@@ -116,9 +123,12 @@ export class LocalAIRuntime {
           this.workerFailure('The local AI worker failed. Source search remains available.');
       };
       worker.onmessageerror = worker.onerror;
-      const result = await abortable(this.request('load', {manifest, capability}), controller.signal);
-      if (result?.ready !== true || Object.keys(result).some(key => key !== 'ready')) throw error('The local AI worker did not confirm model readiness.');
-      this.check(version); this.state('ready');
+      const result = await abortable(this.request('load', {manifest, capability, remember}), controller.signal);
+      if (result?.ready !== true || Object.keys(result).some(key => !['ready','storage'].includes(key))) throw error('The local AI worker did not confirm model readiness.');
+      // Older worker callers may omit this additive receipt. Absence never
+      // establishes persistence; the current worker always reports its outcome.
+      if(result.storage!==undefined)this.storage=this.storageReceipt(result.storage,remember);
+      this.check(version); this.remember = remember; this.state('ready');
     } catch (failure) {
       if (version === this.epoch) { this.dispose(); this.state(failure.unsupported ? 'unsupported' : 'failed', {message: failure.message}); }
       throw failure;
@@ -130,7 +140,8 @@ export class LocalAIRuntime {
     const id = ++this.sequence, version = this.epoch;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => this.workerFailure('Local AI exceeded the request time limit.'), this.timeoutMs);
-      this.pending = {id, version, resolve, reject, timer, type};
+      this.pending = {id, version, resolve, reject, timer, type,
+        ...(type==='load'?{remember:payload.remember===true}:{})};
       try { this.worker.postMessage({id, type, payload}); }
       catch { this.pending = null; clearTimeout(timer); reject(error('The local AI request could not be sent to its worker.')); }
     });
@@ -142,6 +153,13 @@ export class LocalAIRuntime {
         !Number.isSafeInteger(message.id) || message.id !== this.pending.id) {
       this.workerFailure('The local AI worker returned an invalid request identity.'); return;
     }
+    if(message.type==='storage'){
+      try {
+        if(this.pending.type!=='load'||Object.keys(message).some(key=>!['id','type','storage'].includes(key)))throw error('Invalid storage response.');
+        this.storage=this.storageReceipt(message.storage,this.pending.remember);
+      }catch{this.workerFailure('The local AI worker returned invalid model storage information.');return;}
+      this.state('loading',{stage:'storage',loadedBytes:this.loadedBytes??0,totalBytes:this.model.bytes});return;
+    }
     if (message.type === 'progress') {
       if (this.pending.type !== 'load' || !Number.isSafeInteger(message.loadedBytes) || message.loadedBytes < (this.loadedBytes ?? 0) ||
           message.loadedBytes > this.model.bytes || !['downloading', 'verifying', 'initialising'].includes(message.stage) ||
@@ -152,13 +170,23 @@ export class LocalAIRuntime {
       this.state('loading', {stage: message.stage, loadedBytes: message.loadedBytes, totalBytes: this.model.bytes});
       return;
     }
-    if (!['error', 'result'].includes(message.type) || Object.keys(message).some(key => !['id', 'type', message.type === 'error' ? 'message' : 'result'].includes(key))) {
+    if (!['error', 'result'].includes(message.type) || Object.keys(message).some(key => !['id', 'type', ...(message.type === 'error' ? ['message','storage'] : ['result'])].includes(key))) {
       this.workerFailure('The local AI worker returned an invalid response.'); return;
+    }
+    if(message.type==='error'&&message.storage!==undefined){
+      try{if(this.pending.type!=='load')throw error('Unexpected storage result.');this.storage=this.storageReceipt(message.storage,this.pending.remember);}
+      catch{this.workerFailure('The local AI worker returned invalid model storage information.');return;}
     }
     const pending = this.pending; this.pending = null; clearTimeout(pending.timer);
     if (message.type === 'error') pending.reject(error(typeof message.message === 'string' && message.message.trim() ? message.message.slice(0, 300) : 'Local AI failed.'));
     else if (message.type === 'result') pending.resolve(message.result);
     else pending.reject(error('The local AI worker returned an invalid response.'));
+  }
+
+  storageReceipt(value,remember) {
+    const result=validateStorageState(value,this.model?.bytes);
+    if(!remember&&result.status!=='session-only')throw error('Model storage was not consented to.');
+    return result;
   }
 
   workerFailure(message) {
@@ -193,13 +221,36 @@ export class LocalAIRuntime {
   generate(input) {
     const payload = validateGenerationRequest(input, this.manifest?.limits);
     return this.operation('generate', 'generate', payload, generationIdentity, (result, identity) => {
-      if (!result || Array.isArray(result) || Object.keys(result).some(key => !['text', 'provenance'].includes(key)) ||
-          typeof result.text !== 'string' || !result.text.trim() || result.text.length > this.manifest.limits.maxOutputCharacters)
-        throw error('Invalid or oversized local AI proposal.');
-      this.validateProvenance(result.provenance, 'generate');
-      if (Object.entries(identity).some(([key, value]) => JSON.stringify(result.provenance[key]) !== JSON.stringify(value)))
-        throw error('The proposal source content or request identity does not match the request.');
+      this.validateGenerationResult(result,identity);
       return result;
+    });
+  }
+
+  validateGenerationResult(result,identity) {
+    if (!result || Array.isArray(result) || Object.keys(result).some(key => !['text', 'provenance'].includes(key)) ||
+        typeof result.text !== 'string' || !result.text.trim() || result.text.length > this.manifest.limits.maxOutputCharacters)
+      throw error('Invalid or oversized local AI proposal.');
+    this.validateProvenance(result.provenance, 'generate');
+    if (Object.entries(identity).some(([key, value]) => JSON.stringify(result.provenance[key]) !== JSON.stringify(value)))
+      throw error('The proposal source content or request identity does not match the request.');
+  }
+
+  async generateProposal(input,options={}) {
+    // The UI asks the model only for quotations. Strict offset-wire callers can
+    // explicitly retain their earlier protocol; the pure builder still defaults
+    // to it. Packet construction validates the closed options/format contract.
+    const version=this.epoch,packet=await buildProposalRequest(input,
+      options&&typeof options==='object'&&!Array.isArray(options)&&Object.getOwnPropertyDescriptors(options).format===undefined
+        ? Object.create(Object.getPrototypeOf(options),{...Object.getOwnPropertyDescriptors(options),format:{value:QUOTE_PROPOSAL_FORMAT,enumerable:true}})
+        : options);
+    this.check(version);
+    const payload=validateGenerationRequest(packet.generation,this.manifest?.limits);
+    // Keep the engine lease/busy state until every citation and asynchronous
+    // hash check has completed. Cancellation still invalidates the result.
+    return this.operation('generate','generate',payload,generationIdentity,async(result,identity)=>{
+      this.validateGenerationResult(result,identity);
+      const proposal=await validateProposalOutput(result.text,packet);
+      return {proposal,provenance:result.provenance,rawProposal:result.text,proposalRequest:packet};
     });
   }
 
@@ -214,7 +265,7 @@ export class LocalAIRuntime {
   dispose() {
     const pending = this.pending; this.pending = null;
     if (pending) {clearTimeout(pending.timer);pending.reject(error('Local AI resources were released.'));}
-    this.worker?.terminate(); this.worker = null; this.model = null;
+    this.worker?.terminate(); this.worker = null; this.model = null; this.remember = false;
     this.loadedBytes = 0;
     this.releaseLock?.(); this.releaseLock = null;
     if (this.owner && this.pageScope[OWNER] === this) delete this.pageScope[OWNER]; this.owner = null;

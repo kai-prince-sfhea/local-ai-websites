@@ -1,36 +1,196 @@
 ---
-title: "Local AI Websites: source search"
+title: "Local AI Websites: your first source search"
 format: html
 filters:
   - kai-prince-sfhea/local-ai-websites
 ---
 
-This deliberately synthetic page remains useful without a model. Two uses of
-"action" have separate identities and source destinations.
+This tutorial uses ordinary QMD and YAML. Start with source search, then change
+one display label and compare two meanings of a word. No model, API token or
+author-written JavaScript is needed.
+
+## 1. Render and preview this page
+
+Install the extension following its
+[README](https://github.com/kai-prince-sfhea/local-ai-websites#install-from-github),
+then copy this `example.qmd` into your consumer folder. Its front matter already
+activates the GitHub-installed filter; use the README's unqualified selector for
+a local installation.
+
+Use your editor's Render/Preview controls, or run from that folder:
+
+```sh
+quarto render example.qmd
+quarto preview example.qmd
+```
+
+Use the served HTTP preview, rather than opening the HTML with `file://`. You
+should see this tutorial, the source excerpts below and a **Search** control.
+
+## 2. Search one source
+
+The following fenced Div is both ordinary page content and a selected source.
+Its native ID is `math-group-action`; its display label is **Mathematics: group
+action**.
 
 ::: {#math-group-action .local-ai-source data-source-label="Mathematics: group action"}
-## Group action
+### Group action
 
 A group action assigns a transformation to each group element. The identity
 acts as the identity transformation, and composition respects multiplication.
 This definition concerns algebra, not an educational research method.
 :::
 
+In the panel below, enter `#math-group-action` and select **Search**. You should
+get one exact-ID result, **Mathematics: group action**. Follow its link to return
+to the source above. Source links identify material to read; they do not certify
+its truth or replace its qualifications.
+
+::: {.local-ai}
+### Try source search
+
+Enter a term or source identity. Read the original source for context.
+:::
+
+## 3. Change a display label
+
+In this QMD's source, find the source Div opening line and change only its label:
+
+```markdown
+::: {#math-group-action .local-ai-source data-source-label="Algebra: group action"}
+```
+
+Keep its existing content and closing fence. Render again, refresh the preview
+and search `#math-group-action` again. The result is now **Algebra: group action**;
+the stable source ID and link still point to the same excerpt. You can change
+visible wording without changing the concept's source identity.
+
+## 4. Compare meanings without conflating them
+
+Now search for `action`. Both the mathematics excerpt and the education excerpt
+below can match that word. Lexical search returns possible sources; it does not
+assert that their meanings are equivalent. The distinct labels and destinations
+let you choose the relevant context. Search `#education-action-research` to
+select the education source exactly.
+
 ::: {#education-action-research .local-ai-source data-source-label="Education: action research"}
-## Action research
+### Action research
 
 Action research is an inquiry approach in which practitioners investigate and
 reflect on changes to their practice. It does not assert a group action.
 :::
 
 ::: {#evidence .local-ai-source data-source-label="Evidence and generated proposals"}
-## Evidence and review
+### Evidence and review
 
 A generated proposal is unreviewed. A source reference identifies material to
 inspect; it does not prove that the material supports every generated claim.
 An absence of search results does not establish that a proposition is false.
 :::
 
-::: {.local-ai}
-Search these sources by a term or source identity. Read the original source for context.
+## 5. Try a larger public corpus
+
+For a website, keep this tutorial as `example.qmd` and create
+`more-sources.qmd` with this ordinary content:
+
+```markdown
+---
+title: More public sources
+---
+
+::: {#conditional-result .local-ai-source data-source-label="A conditional result"}
+If the stated assumptions hold, the declared conclusion follows. This
+conditional statement does not establish that its assumptions hold.
 :::
+```
+
+Use this small `_quarto.yml` in that two-page project, alongside your installed
+extension:
+
+```yaml
+project:
+  type: website
+format: html
+filters: [kai-prince-sfhea/local-ai-websites]
+local-ai:
+  corpus:
+    pages: [example.html, more-sources.html]
+```
+
+Render the whole project and open its HTTP Preview. Open **Search a larger
+selected public corpus** and choose **Load selected corpus**. Search for
+`assumptions`, then choose **Show matching passages**.
+Follow the original source and inspect its omitted-context counts. These are
+exact source passages; no model wrote a summary. Choose **Use this page’s
+sources** to return to this tutorial's smaller selection. For a local installation, use
+`local-ai-websites` as the filter name.
+
+## Next steps
+
+Replace these synthetic excerpts with your own already-public material and
+give each source a unique native ID. Keep one `.local-ai` panel per page.
+The [README's advanced guidance](https://github.com/kai-prince-sfhea/local-ai-websites#customise-the-page)
+covers project/page options, named-graph discovery, reviewed learning sources,
+styling and optional visitor-confirmed browser-local models. To include another
+page, first mark its public excerpts, then list its actual HTML output in
+`source-pages` using the README's complete website YAML. The reader chooses
+**Load selected page excerpts**; that action loads no model. With a compatible
+Knowledge Graph Extraction installation, **Choose exact graph questions** offers
+deterministic questions while keeping graph identities and coverage visible.
+
+For a project already using both extensions, you can try smaller graph-detail
+requests by merging this into its existing `_quarto.yml`:
+
+```yaml
+knowledge-graph:
+  delivery:
+    mode: topics
+```
+
+Render Project and open its HTTP Preview. Choose an exact graph question and
+run it. Watch the verified-part progress, or cancel and run again: complete
+verified parts can be reused in this tab. The exact answer waits for all required
+parts; a missing part does not become a claim that a concept or route is absent.
+No model or author-written JavaScript is needed. Without topic delivery, the
+same controls use the producer's ordinary complete graph file.
+
+A model is an optional addition after this source-search workflow is working.
+The default `proposal-format: cited-json` checks selected-excerpt quotations
+before displaying an unreviewed proposal. Matching a quote does not show that
+it supports a claim; a model can also return invalid JSON that is refused.
+A complete response may be bare JSON or one whole `json` code fence; no author
+configuration is needed. The original response is retained, the unchanged JSON
+payload is checked, and the proposal remains unreviewed. Prose, partial responses
+and invalid quotations are refused.
+The README explains the explicit `plain-text` compatibility option. None of
+these optional steps is required for this tutorial.
+
+When you later enable a model, readers can separately choose **Reuse and keep**
+to retain download checkpoints and resume when possible. Leaving it unchecked
+keeps model bytes session-only. A complete model must still pass its byte-count
+and SHA256 checks before use. The README explains the storage statuses and
+**Delete saved model downloads**; no extra author script or YAML is required.
+
+On a page with a compatible companion such as Interactive CV, the same ordinary
+`.local-ai` panel supplies the model controls. Review, confirm and load the
+language model here first; then explicitly request a proposal in the companion.
+The companion can use only this page's ready engine and does not download or
+start a model for you. Its deterministic extracts remain available when no
+language model is ready. Source qualifications still need review.
+
+When the project later declares a model manifest, a page can retain the other
+project options while choosing its own graph scope. To keep this page limited
+to source search, add this page option; it clears an inherited model manifest:
+
+```yaml
+local-ai:
+  manifest: false
+```
+
+Use `local-ai: false` to turn the extension off entirely on a page. Project-wide
+model preparation and advanced options are explained in the README.
+
+This original synthetic example was developed with material OpenAI Codex
+assistance under Kai Prince's direction. Its source is supplied under the
+[Apache 2.0 licence](https://www.apache.org/licenses/LICENSE-2.0); no independent
+content, accessibility or model-quality acceptance is implied.

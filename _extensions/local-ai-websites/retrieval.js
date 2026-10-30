@@ -28,7 +28,7 @@ export function validateManifestURL(value) {
   return value;
 }
 export function validatePayload(value) {
-  keys(value,['version','sources','manifest'],'payload');
+  keys(value,['version','sources','manifest','graphRegistry','graphs','sourcePages','corpusPages','proposalFormat'],'payload');
   if(value.version!==0||!Array.isArray(value.sources)||value.sources.length>LIMITS.sources) fail('payload needs version 0 and at most 100 sources');
   const manifest=validateManifestURL(value.manifest),seen=new Set();let total=0;
   const sources=value.sources.map(raw=>{
@@ -41,7 +41,18 @@ export function validatePayload(value) {
     total+=text.length;if(total>LIMITS.total) fail('source text exceeds the 120000-character page budget');
     return Object.freeze({id,text,label,url:raw.url});
   });
-  return Object.freeze({version:0,sources:Object.freeze(sources),manifest});
+  const graphRegistry=value.graphRegistry === undefined || value.graphRegistry === null ? null : validateManifestURL(value.graphRegistry);
+  const graphs=value.graphs ?? false;
+  if (graphs !== false && graphs !== 'all' && (!Array.isArray(graphs) || graphs.length<1 || graphs.length>32 || new Set(graphs).size!==graphs.length || graphs.some(id=>typeof id!=='string'||!/^[a-z][a-z0-9-]{0,63}$/u.test(id)))) fail('graphs must be false, all or a nonempty list of graph IDs');
+  const sourcePages=value.sourcePages??[];
+  if(!Array.isArray(sourcePages)||sourcePages.length>8||new Set(sourcePages).size!==sourcePages.length||sourcePages.some(path=>
+    typeof path!=='string'||path.length>2048||!path||path!==path.trim()||/[\\:?#%<>"'\s\u0000-\u001f\u007f]/u.test(path)||path.startsWith('//')||!/\.html$/iu.test(path)))fail('sourcePages requires at most eight unique local published HTML URLs');
+  const corpusPages=value.corpusPages;
+  if(corpusPages!==undefined&&(!Array.isArray(corpusPages)||corpusPages.length>64||new Set(corpusPages).size!==corpusPages.length||corpusPages.some(path=>
+    typeof path!=='string'||path.length>2048||!path||path!==path.trim()||/[\\:?#%<>"'\s\u0000-\u001f\u007f]/u.test(path)||path.startsWith('//')||!/\.html$/iu.test(path))))fail('corpusPages requires at most 64 unique local published HTML URLs');
+  const proposalFormat=value.proposalFormat??'cited-json';
+  if(!['cited-json','plain-text'].includes(proposalFormat))fail('unknown proposal presentation format');
+  return Object.freeze({version:0,sources:Object.freeze(sources),manifest,graphRegistry,graphs,sourcePages:Object.freeze([...sourcePages]),...(corpusPages===undefined?{}:{corpusPages:Object.freeze([...corpusPages])}),proposalFormat});
 }
 function words(value) {
   return value.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu)??[];
@@ -57,8 +68,22 @@ function validateRankingRequest(query,limit) {
 }
 // The returned sources are defensive, frozen copies. Token sets and postings
 // remain private so repeated queries can reuse them without mutable public state.
-export function createSourceIndex(sources) {
-  const data=validatePayload({version:0,sources,manifest:null}),identities=new Map(),postings=new Map();
+export function createSourceIndex(sources,{graphSources=false,baseURL=globalThis.location?.href}={}) {
+  let data;
+  if (!graphSources) data=validatePayload({version:0,sources,manifest:null});
+  else {
+    if (!Array.isArray(sources)||sources.length>LIMITS.sources) fail('source budget exceeded');
+    const origin=new URL(baseURL).origin,seen=new Set();let total=0;
+    data={sources:Object.freeze(sources.map(raw=>{
+      const id=bounded(raw.id,256,'source id'),text=bounded(raw.text,LIMITS.text,'source text'),label=bounded(raw.label,LIMITS.label,'source label');
+      if(seen.has(id)||/[\s"'<>\u0000-\u001f]/u.test(id)) fail('invalid or duplicate source identity');
+      const url=new URL(raw.url,baseURL);
+      if(url.origin!==origin||!['http:','https:'].includes(url.protocol)||url.username||url.password) fail('source must remain on this website');
+      seen.add(id);total+=text.length;if(total>LIMITS.total) fail('source text budget exceeded');
+      return Object.freeze({...raw,id,text,label,url:url.href});
+    }))};
+  }
+  const identities=new Map(),postings=new Map();
   const entries=data.sources.map((source,position)=>{
     const titleWords=words(source.label),textWords=words(source.text),title=new Set(titleWords),body=new Set(textWords);
     identities.set(source.id,position);

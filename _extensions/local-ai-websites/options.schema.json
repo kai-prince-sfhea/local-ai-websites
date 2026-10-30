@@ -1,13 +1,123 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Local AI Websites options",
-  "type": "object",
-  "description": "Explicit enabled:false is a complete no-op, including stale options. Active options are validated strictly.",
-  "anyOf": [
-    {"required": ["enabled"], "properties": {"enabled": {"const": false}}},
-    {"additionalProperties": false, "properties": {
-      "enabled": {"const": true, "default": true},
-      "manifest": {"type": "string", "maxLength": 2048, "description": "Explicit public JSON file, at most 262144 bytes, copied automatically for HTML panels. A relative URL resolves beside the input document; a /root-relative path resolves within the Quarto rendering context (project root, or input directory for a standalone document) and becomes a document-relative output URL, preserving site subpaths. Symbolic links, query, fragment, percent escapes, backslashes, whitespace and authored traversal are refused. Corrupted Quarto Unicode path values fail safely; the tested Windows locale requires an ASCII consumer/output directory for manifest publication. SDK, WASM and model assets require an exact author resources inventory; no directory is recursively copied. Omit for static search only."}
-    }}
+  "description": "False or enabled:false is a complete no-op, including stale options. Native resolved document defaults are overlaid per key by effective page options; lists/corpus replace atomically.",
+  "oneOf": [
+    {
+      "const": false
+    },
+    {
+      "type": "object",
+      "anyOf": [
+        {
+          "required": [
+            "enabled"
+          ],
+          "properties": {
+            "enabled": {
+              "const": false
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "const": true,
+              "default": true
+            },
+            "publish-assets": {
+              "type": "boolean",
+              "default": false,
+              "description": "Publish the exact prepared asset-receipt.json inventory beside the selected manifest automatically. Explicit opt-in; no directory recursion, downloads or inference during rendering."
+            },
+            "source-pages": {
+              "type": "array",
+              "maxItems": 8,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048,
+                "pattern": "\\.html$"
+              },
+              "description": "Explicit local published HTML URLs with opted-in .local-ai-source excerpts. A reader loads this finite catalogue explicitly. Root-relative URLs are rebased within the Quarto output root, preserving deployment subpaths. Use the actual published filename; QMD filenames are not guessed."
+            },
+            "proposal-format": {
+              "enum": [
+                "cited-json",
+                "plain-text"
+              ],
+              "default": "cited-json",
+              "description": "Cited JSON validates every generated quote and selected-excerpt offset before showing any claim. Quote alignment does not prove support. Plain text retains the legacy unreviewed compatibility mode without per-claim citation checks."
+            },
+            "graphs": {
+              "oneOf": [
+                {
+                  "const": false
+                },
+                {
+                  "const": "all"
+                },
+                {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 32,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,63}$"
+                  }
+                }
+              ],
+              "description": "Public knowledge-graph catalogue discovery. Defaults to all when knowledge-graph metadata is active, otherwise false. All includes the separate CV graph if public and search-eligible; this does not combine graph navigation or admit summaries as reviewed AI evidence."
+            },
+            "manifest": {
+              "oneOf": [
+                {
+                  "const": false
+                },
+                {
+                  "type": "string",
+                  "maxLength": 2048,
+                  "description": "Explicit public JSON file, at most 262144 bytes, copied automatically for HTML panels. A relative URL resolves beside the input document; a /root-relative path resolves within the Quarto rendering context (project root, or input directory for a standalone document) and becomes a document-relative output URL, preserving site subpaths. Symbolic links, query, fragment, percent escapes, backslashes, whitespace and authored traversal are refused. Native UTF-8 document context and the project offset preserve tested ASCII and Latin-1 consumer roots with spaces, nested input names and custom output directories. Arbitrary Unicode/CJK extension-path support is not established. SDK, WASM and model assets require an exact author resources inventory; no directory is recursively copied. Omit for static search only."
+                }
+              ],
+              "description": "False clears an inherited manifest and keeps static source search. Otherwise use an explicit public local JSON URL; project-wide root-relative URLs preserve nested paths."
+            },
+            "corpus": {
+              "oneOf": [
+                {
+                  "const": false
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "pages"
+                  ],
+                  "properties": {
+                    "pages": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 64,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2048,
+                        "pattern": "^(?!//)[^\\\\:?#%<>\"'\\s\\u0000-\\u001f\\u007f]+\\.[hH][tT][mM][lL]$"
+                      }
+                    }
+                  }
+                }
+              ],
+              "default": false,
+              "description": "Explicit corpus of one to 64 local published HTML URLs containing opted-in .local-ai-source excerpts. A reader loads this corpus explicitly. This does not publish pages, scrape unselected content, infer source review or load any model. Root-relative URLs are rebased within the Quarto output root; use the actual published filename. Existing source-pages retains its separate eight-page limit."
+            }
+          }
+        }
+      ]
+    }
   ]
 }

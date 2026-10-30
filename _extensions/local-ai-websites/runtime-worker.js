@@ -1,40 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Kai Prince
 import {validateManifest, validateEmbeddingRequest, validateGenerationRequest, validateEmbedding, EMBEDDING_PROFILE,
-  embeddingIdentity, generationIdentity, digestJSON, GENERATION_PROFILE, GENERATION_PROMPT} from './manifest.js';
+  embeddingIdentity, generationIdentity, digestJSON, GENERATION_PROFILE, generationPrompt} from './manifest.js';
+import {loadVerifiedModel,clearStoredModels,validateStorageState,MODEL_CACHE} from './model-store.js';
 
-export async function fetchVerifiedModel(model, budget, {fetchImpl = globalThis.fetch?.bind(globalThis),
-  cryptoObject = globalThis.crypto, onProgress = () => {}, onVerifying = () => {}} = {}) {
-  if (!Number.isSafeInteger(model?.bytes) || model.bytes < 1 || model.bytes > budget) throw new Error('Model exceeds the declared download/hash budget.');
-  const response = await fetchImpl(model.url, {credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'error'});
-  if (!response?.ok || !response.body) throw new Error('The author-provided model could not be downloaded.');
-  const reader = response.body.getReader(); let buffer;
-  try { buffer = new Uint8Array(model.bytes); }
-  catch { await reader.cancel().catch(() => {}); reader.releaseLock(); throw new Error('This device could not allocate the declared model download/hash buffer.'); }
-  let bytes = 0, progressBytes = 0;
-  try {
-    while (true) {
-      const {done, value} = await reader.read(); if (done) break;
-      if (!(value instanceof Uint8Array)) throw new Error('The model stream is invalid.');
-      if (bytes + value.byteLength > model.bytes || bytes + value.byteLength > budget) throw new Error('The model download exceeds its declared size.');
-      buffer.set(value, bytes); bytes += value.byteLength;
-      // Network chunks can be tiny. Bound cross-worker progress messages to
-      // cumulative 1 MiB steps while always reporting the exact final bytes.
-      if (bytes > progressBytes && (bytes === model.bytes || bytes - progressBytes >= 1048576)) {
-        onProgress(bytes); progressBytes = bytes;
-      }
-    }
-  } catch (failure) { await reader.cancel().catch(() => {}); throw failure; }
-  finally { reader.releaseLock(); }
-  if (bytes !== model.bytes) throw new Error('The model download is incomplete.');
-  onVerifying(bytes);
-  // One preallocated buffer avoids unbounded per-chunk bookkeeping. Web Crypto
-  // still hashes a whole-model buffer and Blob creation may copy it; the byte
-  // ceiling is not a promise about total browser/SDK/GPU working memory.
-  const digest = [...new Uint8Array(await cryptoObject.subtle.digest('SHA-256', buffer))]
-    .map(value => value.toString(16).padStart(2, '0')).join('');
-  if (digest !== model.sha256) throw new Error('The model digest does not match the reviewed manifest.');
-  return new Blob([buffer], {type: 'application/octet-stream'});
+export {MODEL_CACHE,clearStoredModels,validateStorageState};
+// Compatibility APIs retain their Blob/boolean return values. Detailed callers
+// can inspect the separately typed storage receipts without inferring success.
+export async function clearModelCache(cacheStorage = globalThis.caches, options = {}) {
+  return (await clearStoredModels({...options,cacheStorage})).status === 'cleared';
+}
+export async function fetchVerifiedModel(model, budget, options = {}) {
+  return (await loadVerifiedModel(model,budget,options)).blob;
 }
 
 export function modelProvenance(manifest, model, details = {}) {
@@ -91,12 +68,14 @@ export async function createAdapter(manifest, model, sdk, blob) {
     }, async release() { await engine.delete(); }};
   }
   if (!sdk.Engine?.create) throw new Error('The configured SDK lacks the declared generation API.');
-  const engine = await sdk.Engine.create({model: blob, backend: sdk.Backend.GPU, mainExecutorSettings: {maxNumTokens: 4096}});
+  // The pinned SDK defaults generation to GPU_ARTISAN (its streaming executor).
+  // Backend.GPU is the embedding default and fails this web generation artifact.
+  const engine = await sdk.Engine.create({model: blob, mainExecutorSettings: {maxNumTokens: 4096}});
   return {async generate(input) {
     const validated = validateGenerationRequest(input, manifest.limits), identity = await generationIdentity(validated); let conversation, reader;
     try {
       conversation = await engine.createConversation({preface: {messages: [{role: 'system', content:
-        GENERATION_PROMPT}],
+        generationPrompt(validated.outputFormat)}],
         extra_context: {enable_thinking: false}}, sessionConfig: {maxOutputTokens: GENERATION_PROFILE.maxOutputTokens}});
       const message = {role: 'user', content: JSON.stringify({question: validated.question, evidence: validated.evidence})};
       reader = conversation.sendMessageStreaming(message).getReader(); let output = '', total = 0;
@@ -138,31 +117,34 @@ if (workerScope) workerScope.onmessage = async ({data}) => {
   const {id, type, payload} = data ?? {};
   if (!Number.isSafeInteger(id) || id < 1) return;
   if (busy) { workerScope.postMessage({id, type: 'error', message: 'The local AI worker is already busy.'}); return; }
-  busy = true;
+  busy = true; let storage = null;
   try {
     let result;
     if (Object.keys(data).some(key => !['id', 'type', 'payload'].includes(key))) throw new Error('Unknown worker request field.');
     if (type === 'load') {
       if (adapter) throw new Error('Release the existing local model before loading another.');
-      if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).some(key => !['manifest', 'capability'].includes(key))) throw new Error('Invalid model load request.');
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).some(key => !['manifest', 'capability', 'remember'].includes(key)) || (payload.remember !== undefined && typeof payload.remember !== 'boolean')) throw new Error('Invalid model load request.');
       manifest = validateManifest(payload?.manifest, workerScope.location.href);
       model = manifest.models.find(record => record.capability === payload.capability);
       if (!model) throw new Error('Unknown local model capability.');
-      const blob = await fetchVerifiedModel(model, manifest.limits.maxModelBytes,
-        {onProgress: loadedBytes => workerScope.postMessage({id, type: 'progress', stage: 'downloading', loadedBytes}),
-          onVerifying: loadedBytes => workerScope.postMessage({id, type: 'progress', stage: 'verifying', loadedBytes})});
+      const loaded = await loadVerifiedModel(model, manifest.limits.maxModelBytes,
+        {remember: payload.remember === true, onProgress: loadedBytes => workerScope.postMessage({id, type: 'progress', stage: 'downloading', loadedBytes}),
+          onVerifying: loadedBytes => workerScope.postMessage({id, type: 'progress', stage: 'verifying', loadedBytes}),
+          onStorage: value => {storage=validateStorageState(value,model.bytes);workerScope.postMessage({id,type:'storage',storage});}});
+      storage=validateStorageState(loaded.storage,model.bytes);
       // SDK graph and WASM inventory are author-trusted. Their declarations are
       // not transitive integrity enforcement; the model digest has narrower scope.
       workerScope.postMessage({id, type: 'progress', stage: 'initialising', loadedBytes: model.bytes});
       const sdk = await import(manifest.runtime.moduleURL);
-      adapter = await createAdapter(manifest, model, sdk, blob); result = {ready: true};
+      adapter = await createAdapter(manifest, model, sdk, loaded.blob); result = {ready: true,storage};
     } else if (type === 'embed' && model?.capability === 'embed' && adapter) result = await adapter.embed(payload);
     else if (type === 'generate' && model?.capability === 'generate' && adapter) result = await adapter.generate(payload);
     else throw new Error('The requested local capability is not loaded.');
     workerScope.postMessage({id, type: 'result', result});
-  } catch {
+  } catch (failure) {
     try { await adapter?.release(); } catch { /* Worker termination is the final cleanup boundary. */ }
     adapter = null;
-    workerScope.postMessage({id, type: 'error', message: 'Local AI failed to load or complete this bounded request. Source search remains available.'});
+    if(type==='load')try{storage=validateStorageState(failure?.storage??storage,model?.bytes);}catch{storage=null;}
+    workerScope.postMessage({id, type: 'error', message: 'Local AI failed to load or complete this bounded request. Source search remains available.',...(type==='load'&&storage?{storage}:{})});
   } finally { busy = false; }
 };
