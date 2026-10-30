@@ -17,7 +17,9 @@ export function mountSupportReviewControls(parent,{rawProposal,selection,isCurre
  const alive=()=>!disposed&&isCurrent()===true;
  const listen=(target,event,handler)=>{target.addEventListener(event,handler);listeners.push([target,event,handler]);};
  const notify=text=>{if(!alive())return;status.textContent=text;try{announce(text);}catch{/* Presentation callbacks do not alter resource ownership. */}};
- function controls(){save.disabled=!readyState||busy;download.disabled=!readyState||busy||dirty||session.get()===null;importButton.disabled=!readyState||busy;file.disabled=!readyState||busy;for(const row of rows){row.choice.disabled=busy;row.note.disabled=busy;}clear.disabled=!readyState;}
+ // Busy alone is contextual unavailability: retain native button focus while task() guards duplicate activation.
+ function gateButton(control,unavailable){const pending=busy&&!unavailable;control.disabled=unavailable;control.setAttribute('aria-disabled',String(unavailable||pending));control.setAttribute('aria-busy',String(pending));}
+ function controls(){gateButton(save,!readyState);gateButton(download,!readyState||dirty||session.get()===null);gateButton(importButton,!readyState);file.disabled=!readyState||busy;for(const row of rows){row.choice.disabled=busy;row.note.disabled=busy;}clear.disabled=!readyState;}
  const markDirty=()=>{dirty=true;controls();notify('Unsaved reader judgments. Save to replace the in-memory report; no source or model claim has changed.');};
  function renderValues(report){const judgments=new Map(report?.judgments.map(item=>[item.claimIndex,item])??[]);for(const row of rows){const saved=judgments.get(row.claimIndex);row.choice.value=saved?.decision??'';row.note.value=saved?.note??'';}dirty=false;}
  async function task(action){

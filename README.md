@@ -2,9 +2,9 @@
 
 An experimental Quarto extension for source search and optional browser-local assistance. Authored public excerpts remain readable and searchable without a model. The selected model defaults are **EmbeddingGemma 2**, with text-only 768-dimensional retrieval, and **Gemma 4 E2B** for generated proposals.
 
-Version **0.0.12** is experimental source requiring **Quarto 1.11.5 or later**. Development uses the Windows pre-release. The repository publishes source; it does not establish a supported release or production deployment. No model weights, SDK bundle or WASM binaries are included. A previous bounded actual EmbeddingGemma 2 smoke test passed in one Codex in-app browser with AMD RDNA-3 WebGPU over secure loopback HTTP: semantic discovery on three synthetic sources, loading, cancellation/recovery, release/reset and ordinary source search. This does not establish independent retrieval quality, memory/latency support, network-egress assurance, citation support, mathematical fidelity, accessibility conformance or production deployment acceptance.
+Version **0.0.13** is experimental source requiring **Quarto 1.11.5 or later**. Development uses the Windows pre-release. The repository publishes source; it does not establish a supported release or production deployment. No model weights, SDK bundle or WASM binaries are included. A previous bounded actual EmbeddingGemma 2 smoke test passed in one Codex in-app browser with AMD RDNA-3 WebGPU over secure loopback HTTP: semantic discovery on three synthetic sources, loading, cancellation/recovery, release/reset and ordinary source search. This does not establish independent retrieval quality, memory/latency support, network-egress assurance, citation support, mathematical fidelity, accessibility conformance or production deployment acceptance.
 
-Version 0.0.12 is development source distributed from the experimental `main` branch. The GitHub and local-source instructions below provide alternative installation routes. Install matching companion versions; neither route establishes a supported release.
+Version 0.0.13 is development source distributed from the experimental `main` branch. The GitHub and local-source instructions below provide alternative installation routes. Install matching companion versions; neither route establishes a supported release.
 
 ## Start with source search
 
@@ -12,6 +12,15 @@ The runnable [example.qmd](example.qmd) is the tutorial: render it, try lexical
 search, edit one display label and compare distinct meanings of "action". It
 needs only Quarto, QMD and YAML. This README covers the configuration and optional
 integrations to use after that first page works.
+
+Search and the current source count appear first. Open **Sources and search
+coverage** to browse the full selected catalogue, source identifiers and coverage
+details. Incomplete or bounded graph warnings stay visible beside search.
+**Optional local AI** groups model controls in a native disclosure. Reviewing
+files still requires separate, visible confirmation before loading; the consent
+panel and active Cancel control remain outside that disclosure. A companion's
+explicit focus action opens the model controls before focusing them and does
+not load a model. Without JavaScript, the native selected-source list remains.
 
 ## Install from GitHub
 
@@ -230,6 +239,8 @@ or invalid imports retain the previous saved report. Clear removes it; changing
 the question or sources clears the associated proposal and report. No judgments
 are automatically stored or published. Plain-text compatibility proposals do
 not receive structured claim-review controls.
+
+Save, eligible Export and Import retain keyboard focus while a reader-judgment action is busy. Clear can invalidate pending work. Moving elsewhere keeps the reader’s current focus; unavailable exports remain disabled.
 
 Limits are 64 explicitly selected same-site HTML pages, 2 MiB per response,
 16 MiB cumulative response bytes, 512 admitted excerpts, 1 Mi UTF-16 text units

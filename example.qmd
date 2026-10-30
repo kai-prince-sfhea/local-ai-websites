@@ -26,6 +26,10 @@ quarto preview example.qmd
 
 Use the served HTTP preview, rather than opening the HTML with `file://`. You
 should see this tutorial, the source excerpts below and a **Search** control.
+Search and its selected-source count come first. Open **Sources and search
+coverage** to inspect the catalogue and its scope. When you later configure
+models, their controls appear under **Optional local AI**; reviewing files does
+not load them, and confirmation remains visible outside that disclosure.
 
 ## 2. Search one source
 

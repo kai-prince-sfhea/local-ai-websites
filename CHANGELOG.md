@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.0.13 — source-search presentation and keyboard focus — local development
+
+- Keep busy reader-judgment actions focusable with explicit busy/unavailable states. Preserve native disabled states for unavailable exports, duplicate-action and stale-work guards, explicit import/export and unauthenticated review status.
+
+- Put search and the current selection count first. Keep the full native source
+  catalogue and identifiers/coverage in a non-live native disclosure; incomplete,
+  bounded and unavailable graph warnings remain visible with search.
+- Group optional AI controls in a native disclosure while retaining prominent
+  model-file confirmation and active cancellation outside it. Provider focus
+  opens the controls without fetching or loading a model.
+- Capture Cancel focus before disabling it on completion and preserve focus
+  when the reader has moved elsewhere. Apply the same rule to companion requests.
+- Pair scoped control colours, retain 44px targets, wrap narrow controls and
+  space companion actions. Preserve source, model consent, byte verification,
+  storage, provider and proposal contracts. No implicit acquisition or inference.
+- Pure UI/provider protocol checks are separate from native, browser, model,
+  human accessibility and semantic acceptance.
+
 ## 0.0.12 — declared structured-response envelopes — local development
 
 - Accept bare JSON or one whole lowercase JSON code fence with LF/CRLF delimiters

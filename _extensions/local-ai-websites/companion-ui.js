@@ -8,23 +8,24 @@ const field=(text,input)=>{const label=node('label',text+' ');label.append(input
 const option=(id,label)=>{const value=node('option',label);value.value=id;return value;};
 
 export function mountCompanionControls({root,payload,isBusy,onBusy,onSources,onContext,announce,onCorpus,onCorpusFilters}) {
-  let epoch=0,controller=null,providers=[],disposed=false,busyState=false,corpusState=null,corpusActive=false,finishTask=null;
+  let epoch=0,controller=null,providers=[],disposed=false,busyState=false,corpusState=null,corpusActive=false,finishTask=null,taskOrigin=null;
   const section=node('section');section.className='local-ai-companions';
   section.setAttribute('aria-label','Explicit page sources and exact graph questions');
   const taskButtons=[],inputs=[];
-  const abortButton=button('Cancel page-source or graph request');abortButton.disabled=true;
+  const abortButton=button('Cancel page-source or graph request');abortButton.disabled=true;abortButton.hidden=true;
   let updateCorpusControls=()=>{},readCorpusFilters=()=>Object.freeze({});
-  const setBusy=value=>{busyState=value;for(const item of [...taskButtons,...inputs])item.disabled=value;updateCorpusControls();abortButton.disabled=!controller;};
+  const setBusy=value=>{busyState=value;for(const item of [...taskButtons,...inputs])item.disabled=value;updateCorpusControls();abortButton.disabled=!controller;abortButton.hidden=!controller;};
   const busy=value=>{setBusy(value);onBusy(value);};
-  const cancel=()=>{const finish=finishTask;finishTask=null;epoch++;controller?.abort();controller=null;abortButton.disabled=true;if(!disposed)finish?.('cancelled');};
-  abortButton.addEventListener('click',()=>{cancel();busy(false);announce('Page-source or graph request cancelled. Existing source search remains available.');});
+  const restoreFocus=origin=>{if(origin?.isConnected!==false&&typeof origin?.focus==='function')origin.focus();};
+  const cancel=()=>{const returnFocus=document.activeElement===abortButton,origin=taskOrigin,finish=finishTask;finishTask=null;epoch++;controller?.abort();controller=null;busy(false);if(!disposed){finish?.('cancelled');if(returnFocus)restoreFocus(origin);}};
+  abortButton.addEventListener('click',()=>{cancel();announce('Page-source or graph request cancelled. Existing source search remains available.');});
   async function task(action,onFinished){
     if(disposed||isBusy())return;
-    const version=++epoch,owner=new AbortController();controller=owner;finishTask=onFinished??null;const signal=owner.signal;let outcome='completed';
-    const timer=setTimeout(()=>owner.abort(),30000);abortButton.disabled=false;busy(true);
+    const version=++epoch,owner=new AbortController(),origin=document.activeElement;controller=owner;taskOrigin=origin;finishTask=onFinished??null;const signal=owner.signal;let outcome='completed';
+    const timer=setTimeout(()=>owner.abort(),30000);abortButton.disabled=false;abortButton.hidden=false;abortButton.focus();busy(true);
     try{await action({signal,isCurrent:()=>!disposed&&version===epoch&&!signal.aborted});}
     catch(error){outcome=signal.aborted?'cancelled':'failed';if(version===epoch&&!onFinished)announce(`The selected companion action failed: ${String(error.message).slice(0,200)}. Existing source search remains available.`);}
-    finally{clearTimeout(timer);if(version===epoch){finishTask=null;controller=null;abortButton.disabled=true;busy(false);onFinished?.(outcome);}}
+    finally{clearTimeout(timer);if(version===epoch){const returnFocus=document.activeElement===abortButton;finishTask=null;controller=null;abortButton.disabled=true;busy(false);onFinished?.(outcome);if(returnFocus)restoreFocus(origin);}}
   }
   let selectPageSources=()=>{};
   if(payload.corpusPages?.length){

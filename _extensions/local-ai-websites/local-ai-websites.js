@@ -71,15 +71,25 @@ function enhance(panel) {
   form.append(label,submit,passages);
   const status=element('p','Search uses only the explicitly selected sources on this page.','local-ai-status');
   status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.setAttribute('aria-atomic','true');
+  const sourceCount=element('p',undefined,'local-ai-source-count'),coverageWarning=element('p',undefined,'local-ai-coverage-warning');coverageWarning.hidden=true;
+  const coverage=element('details',undefined,'local-ai-coverage'),coverageNote=element('p'),catalogue=element('ul'),coverageAudit=element('details'),coverageReceipt=element('pre');
+  coverage.append(element('summary','Sources and search coverage'),coverageNote);
+  coverageAudit.append(element('summary','Inspect source identifiers and coverage'),coverageReceipt);
+  const nativeCatalogue=panel.querySelector(':scope > .local-ai-sources');
+  let catalogueState={graphs:[],bounded:false,omitted:0,unavailable:false};
   const storageDetails=element('p',undefined,'local-ai-storage');storageDetails.hidden=true;
   const results=element('ol',undefined,'local-ai-results');
   results.setAttribute('aria-label','Selected page source search results');
   const answer=element('section',undefined,'local-ai-proposal');answer.hidden=true;
   let runtime=null,revision=0,matches=[],lastQuery='',busy=false,activeTask=false,runtimeBusy=false,loadedRole=null,chosenRole=null,manifest=null,storageController=null;
   const embeddings=new Map(),controls=element('div',undefined,'local-ai-actions');
+  const aiTools=element('details',undefined,'local-ai-tools'),activeActions=element('div',undefined,'local-ai-active-actions');
+  aiTools.append(element('summary','Optional local AI'));
+  const focusAI=control=>{aiTools.open=true;control.focus();};
   const reviewEmbed=button('Review embedding model files'),reviewGenerate=button('Review language model files');
   const rerank=button('Rerank matches with embeddings'),semanticSearch=button('Search selected sources with embeddings'),generate=button('Draft an unreviewed explanation');
   const cancel=button('Cancel local AI'),release=button('Release local AI and clear proposals');
+  activeActions.append(cancel);activeActions.hidden=true;
   const reset=button('Reset local AI session');
   const clearCache=button('Delete saved model downloads');
   const consent=element('section',undefined,'local-ai-consent');consent.hidden=true;
@@ -102,9 +112,20 @@ function enhance(panel) {
     rerank.disabled=busy||loadedRole!=='embed'||!evidence;
     semanticSearch.disabled=busy||loadedRole!=='embed'||!query.value.trim()||!(activeCorpus?.corpus.sources??sources).length;
     generate.disabled=busy||loadedRole!=='generate'||!evidence||!matches.some(item=>!item.discoveryOnly);
-    cancel.disabled=!busy;release.disabled=!runtime;reset.disabled=!runtime;
+    cancel.disabled=!busy;activeActions.hidden=!busy;release.disabled=!runtime;reset.disabled=!runtime;
     clearCache.disabled=storageController!==null;
     companionControls?.setBusy(busy);
+  }
+  function refreshCoverage(){
+    const selected=activeCorpus?.corpus.sources??sources;
+    sourceCount.textContent=`${selected.length} selected source${selected.length===1?'':'s'} available. Search covers this selection only; no model is needed.`;
+    const incomplete=catalogueState.graphs.some(graph=>graph.status!=='complete'),bounded=catalogueState.bounded||catalogueState.omitted>0;
+    coverageWarning.textContent=[incomplete?'One or more graph snapshots are incomplete; a missing result is not evidence of absence.':'',bounded?'Graph discovery uses a bounded subset in this panel. Website search covers all eligible public graphs.':'',catalogueState.unavailable?'Public graph discovery is unavailable. Selected page source search remains available.':''].filter(Boolean).join(' ');coverageWarning.hidden=!coverageWarning.textContent;
+    coverageNote.textContent=activeCorpus?'Searching the explicitly loaded public excerpts, with the selected graph, language and declared-review filters. This is not whole-website coverage or verified claim support.':`Search includes ${nativeSources.length} page-selected sources, ${excerptSources.length} loaded public excerpts and ${Math.max(0,sources.length-nativeSources.length-excerptSources.length)} graph catalogue entries. Graph labels and summaries aid discovery; they are not automatically reviewed AI evidence.${payload.manifest?' Optional AI requires separate file review and explicit confirmation.':' No local AI model manifest is configured.'}`;
+    catalogue.replaceChildren();
+    for(const source of selected){const item=element('li'),link=element('a',source.label);link.href=source.url;item.append(link);if(source.graphId)item.append(element('small',`Graph ${source.graphId}; snapshot ${source.snapshotId??'not supplied'}. ${source.discoveryOnly?'Discovery metadata only.':'Explicit selected excerpt; support not verified.'}`));catalogue.append(item);}
+    catalogue.hidden=!catalogue.childNodes.length;
+    coverageReceipt.textContent=JSON.stringify({scope:activeCorpus?'explicit-loaded-public-corpus':'selected-page-sources-and-public-discovery',sources:selected.map(({id,url,graphId,snapshotId,discoveryOnly})=>({id,url,...(graphId?{graphId,snapshotId,discoveryOnly}:{})})),graphs:catalogueState.graphs,bounded:!!bounded,omittedGraphEntries:catalogueState.omitted,...(activeCorpus?{coverage:activeCorpus.corpus.coverage}:{}),claimSupport:'not-verified'},null,2);
   }
   function showResults(items,semantic=false) {
     results.replaceChildren();
@@ -128,7 +149,7 @@ function enhance(panel) {
     revision++;runtime?.cancel();embeddings.clear();clearProposal();matches=[];lastQuery='';results.replaceChildren();
     activeCorpus=value;lastExactContext=null;
     searchLabel(value?'Search the loaded public corpus ':'Search selected page sources ');
-    refresh();announce(value?`${value.corpus.sources.length} explicitly selected public excerpts loaded. Enter search terms; graph, language and review filters are available below. Loading sources does not load a model.`:'Search now uses the selected page sources. The larger loaded corpus remains optional.');
+    refresh();refreshCoverage();announce(value?`${value.corpus.sources.length} explicitly selected public excerpts loaded. Enter search terms; graph, language and review filters are available below. Loading sources does not load a model.`:'Search now uses the selected page sources. The larger loaded corpus remains optional.');
   }
   function corpusEvidenceIds(context){
     const selected=matches.filter(source=>!source.discoveryOnly);
@@ -162,10 +183,11 @@ function enhance(panel) {
     storageDetails.hidden=false;
   }
   function stop(message,dispose=false) {
+    const returnFocus=document.activeElement===cancel;
     revision++;storageController?.abort();storageController=null;companionControls?.cancel();runtime?.[dispose?'release':'cancel']();activeTask=false;runtimeBusy=false;loadedRole=null;embeddings.clear();clearProposal();
     confirmed.checked=false;consent.hidden=true;chosenRole=null;
     if(matches.length) showResults(matches);
-    refresh();announce(message);
+    refresh();if(returnFocus)query.focus();announce(message);
   }
   function getRuntime() {
     if(runtime) return runtime;
@@ -187,6 +209,7 @@ function enhance(panel) {
     return runtime;
   }
   async function review(role) {
+    aiTools.open=true;
     const token=++revision;activeTask=true;clearProposal();confirmed.checked=false;remember.checked=false;chosenRole=null;consent.hidden=true;refresh();cancel.focus();
     try {
       manifest=await getRuntime().inspectManifest();if(token!==revision) return;
@@ -195,9 +218,9 @@ function enhance(panel) {
       const sdkBytes=manifest.runtime.inventory.reduce((sum,file)=>sum+file.bytes,0);
       details.textContent=`${model.id}: ${bytes(model.bytes)}; model licence: ${model.licence}. Runtime ${manifest.runtime.name} ${manifest.runtime.version}: ${bytes(sdkBytes)}; runtime licence: ${manifest.runtime.licence}. Total declared transfer: ${bytes(model.bytes+sdkBytes)}. Browser memory use can be larger. These are author-provided same-origin files. Loading is optional; results and proposals are not independent verification.`;
       chosenRole=role;load.textContent=role==='embed'?'Load confirmed embedding model':'Load confirmed language model';
-      activeTask=false;consent.hidden=false;refresh();if(document.activeElement===cancel) confirmed.focus();
+      const returnFocus=document.activeElement===cancel;activeTask=false;consent.hidden=false;refresh();if(returnFocus) confirmed.focus();
       announce('Review the declared file sizes and licences, then confirm explicitly to load a model.');
-    } catch(error) {if(token===revision) {activeTask=false;runtimeBusy=false;refresh();if(document.activeElement===cancel) (role==='embed'?reviewEmbed:reviewGenerate).focus();announce(`Local AI review failed: ${String(error.message).slice(0,240)} Static search remains available.`);}}
+    } catch(error) {if(token===revision) {const returnFocus=document.activeElement===cancel;activeTask=false;runtimeBusy=false;refresh();if(returnFocus) focusAI(role==='embed'?reviewEmbed:reviewGenerate);announce(`Local AI review failed: ${String(error.message).slice(0,240)} Static search remains available.`);}}
   }
   reviewEmbed.addEventListener('click',()=>void review('embed'));
   reviewGenerate.addEventListener('click',()=>void review('generate'));
@@ -205,8 +228,8 @@ function enhance(panel) {
   load.addEventListener('click',async()=>{
     if(!confirmed.checked||!chosenRole||busy) return;
     const role=chosenRole,token=++revision;activeTask=true;clearProposal();embeddings.clear();consent.hidden=true;confirmed.checked=false;refresh();cancel.focus();
-    try {await getRuntime().load(role,{remember:remember.checked});if(token!==revision) return;activeTask=false;loadedRole=role;refresh();if(document.activeElement===cancel) ((role==='embed'?rerank:generate).disabled?query:(role==='embed'?rerank:generate)).focus();}
-    catch(error) {if(token===revision) {activeTask=false;runtimeBusy=false;loadedRole=null;refresh();if(document.activeElement===cancel) (role==='embed'?reviewEmbed:reviewGenerate).focus();announce(`Local AI could not load: ${String(error.message).slice(0,240)} Static search remains available.`);}}
+    try {await getRuntime().load(role,{remember:remember.checked});if(token!==revision) return;const returnFocus=document.activeElement===cancel;activeTask=false;loadedRole=role;refresh();if(returnFocus){const control=role==='embed'?rerank:generate;if(control.disabled)query.focus();else focusAI(control);}}
+    catch(error) {if(token===revision) {const returnFocus=document.activeElement===cancel;activeTask=false;runtimeBusy=false;loadedRole=null;refresh();if(returnFocus) focusAI(role==='embed'?reviewEmbed:reviewGenerate);announce(`Local AI could not load: ${String(error.message).slice(0,240)} Static search remains available.`);}}
   });
   form.addEventListener('submit',event=>{
     event.preventDefault();
@@ -248,10 +271,10 @@ function enhance(panel) {
       }
       if(token!==revision) return;
       ranked.sort((a,b)=>b.similarity-a.similarity||b.score-a.score||a.position-b.position);
-      matches=ranked.slice(0,10);lastQuery=questionText;activeTask=false;loadedRole='embed';showResults(matches,true);refresh();
-      if(document.activeElement===cancel) (allSources?semanticSearch:rerank).focus();
+      const returnFocus=document.activeElement===cancel;matches=ranked.slice(0,10);lastQuery=questionText;activeTask=false;loadedRole='embed';showResults(matches,true);refresh();
+      if(returnFocus) focusAI(allSources?semanticSearch:rerank);
       announce(allSources?'Up to 10 selected sources ranked by session-only embedding similarity. This is discovery, not a verified answer or exhaustive evidence search.':'Lexical matches reordered using session-only embedding similarities. Similarity does not establish meaning or truth.');
-    } catch(error) {if(token===revision) {activeTask=false;runtimeBusy=false;refresh();showResults(matches);if(document.activeElement===cancel) query.focus();announce(`Embedding ranking failed: ${String(error.message).slice(0,240)} Previous source results are retained.`);}}
+    } catch(error) {if(token===revision) {const returnFocus=document.activeElement===cancel;activeTask=false;runtimeBusy=false;refresh();showResults(matches);if(returnFocus) query.focus();announce(`Embedding ranking failed: ${String(error.message).slice(0,240)} Previous source results are retained.`);}}
   }
   rerank.addEventListener('click',()=>rankWithEmbeddings(false));
   semanticSearch.addEventListener('click',()=>rankWithEmbeddings(true));
@@ -293,9 +316,9 @@ function enhance(panel) {
       const provenance=response.provenance;
       answer.append(element('p',`Model: ${provenance.model.id}; revision: ${provenance.model.revision}. Selected excerpts were supplied as evidence; links do not prove that each generated assertion is supported.`),sourceList);
       const record=element('details'),summary=element('summary','Proposal provenance');record.append(summary,element('pre',JSON.stringify(provenance,null,2)));answer.append(record);
-      answer.hidden=false;activeTask=false;loadedRole='generate';refresh();announce('An unreviewed AI proposal is available below with its selected sources.');
-      if(document.activeElement===cancel) generate.focus();
-    } catch(error) {if(token===revision) {activeTask=false;runtimeBusy=false;refresh();if(document.activeElement===cancel) query.focus();announce(`Local drafting failed: ${String(error.message).slice(0,240)} Canonical sources are unchanged.`);}}
+      const returnFocus=document.activeElement===cancel;answer.hidden=false;activeTask=false;loadedRole='generate';refresh();announce('An unreviewed AI proposal is available below with its selected sources.');
+      if(returnFocus) focusAI(generate);
+    } catch(error) {if(token===revision) {const returnFocus=document.activeElement===cancel;activeTask=false;runtimeBusy=false;refresh();if(returnFocus) query.focus();announce(`Local drafting failed: ${String(error.message).slice(0,240)} Canonical sources are unchanged.`);}}
   });
   cancel.addEventListener('click',()=>{stop('Local AI cancelled. Static search and canonical sources remain available.');query.focus();});
   release.addEventListener('click',()=>{stop('Local AI released and proposals cleared. Static search remains available.',true);query.focus();});
@@ -305,7 +328,7 @@ function enhance(panel) {
   });
   clearCache.addEventListener('click',async()=>{
     stop('Releasing local AI before deleting saved downloads.',true);
-    const controller=new AbortController(),token=++revision;storageController=controller;activeTask=true;refresh();
+    const controller=new AbortController(),token=++revision;storageController=controller;activeTask=true;refresh();cancel.focus();
     try {
       const result=validateClearStorageResult(await clearStoredModels({signal:controller.signal}));if(token!==revision)return;
       storageDetails.hidden=true;storageDetails.textContent='';if(runtime)runtime.storage=null;
@@ -315,13 +338,17 @@ function enhance(panel) {
       else announce(`The browser could not confirm complete deletion (${result.code??'storage-unavailable'}; ${result.removedCaches} stores removed). Saved bytes may remain. Use the browser's site-data controls if needed.`);
     }
     catch {if(token===revision)announce('The browser could not confirm deletion of saved model downloads. Saved bytes may remain; use the browser\'s site-data controls.');}
-    finally {if(storageController===controller)storageController=null;if(token===revision){activeTask=false;refresh();query.focus();}}
+    finally {if(storageController===controller)storageController=null;if(token===revision){const returnFocus=document.activeElement===cancel;activeTask=false;refresh();if(returnFocus)query.focus();}}
   });
   if(payload.manifest) {
-    controls.append(reviewEmbed,reviewGenerate,rerank,semanticSearch,generate,cancel,release,reset,clearCache);
-    slot.append(element('p','Local AI is optional. Review and confirm model/runtime files before any model load. The configured browser runtime receives your question and selected page excerpts; review the author-provided runtime before use.'));
-  } else slot.append(element('p','No local AI model manifest is configured. Static search and canonical sources remain available.'));
-  slot.append(form,status,storageDetails,results,controls,consent,answer);refresh();slot.hidden=false;
+    controls.append(reviewEmbed,reviewGenerate,rerank,semanticSearch,generate,release,reset,clearCache);
+    aiTools.append(element('p','Review and confirm model/runtime files before loading. The optional browser runtime receives your question and selected excerpts. Review the author-provided runtime before use; generated proposals remain unreviewed.'),controls);
+  } else aiTools.hidden=true;
+  slot.append(form,sourceCount,coverageWarning,status,storageDetails,results,activeActions,consent,answer,coverage,aiTools);
+  coverage.append(catalogue,coverageAudit);refreshCoverage();refresh();slot.hidden=false;
+  // Keep native links outside the print-hidden enhancement. The disclosure
+  // uses the same validated records; native/no-JS/printed content stays intact.
+  if(nativeCatalogue)nativeCatalogue.className+=' local-ai-canonical-enhanced';
   function combinedCatalogue(nextExcerpts,nextGraphs){
     const selected=[...nativeSources,...nextExcerpts];let total=selected.reduce((sum,item)=>sum+item.text.length,0);
     if(selected.length>LIMITS.sources||total>LIMITS.total)throw Error('Combined explicitly selected excerpts exceed this panel\'s source budget; select fewer pages.');
@@ -334,7 +361,7 @@ function enhance(panel) {
     onContext:value=>{if(activeCorpus)return;lastExactContext=value;clearProposal();},onSources:catalogue=>{
       const combined=combinedCatalogue(catalogue.sources,graphSources);
       stop('Selected page excerpts refreshed.');activeCorpus=null;searchLabel('Search selected page sources ');excerptSources=catalogue.sources;sources=combined.index.sources;sourceIndex=combined.index;snapshotPromise=null;lastExactContext=null;
-      matches=[];lastQuery='';results.replaceChildren();refresh();return catalogue.sources.length;
+      catalogueState.omitted=combined.omitted;matches=[];lastQuery='';results.replaceChildren();refreshCoverage();refresh();return catalogue.sources.length;
     }});
   const graphController=new AbortController();
   if(payload.graphRegistry&&payload.graphs!==false)void loadGraphSources(payload.graphRegistry,payload.graphs,{baseURL:location.href,localSources:[],signal:graphController.signal}).then(result=>{
@@ -342,19 +369,18 @@ function enhance(panel) {
     // Validate the whole replacement before touching the usable local state.
     // A catalogue/native ID collision must not leave sources and index apart.
     const combined=combinedCatalogue(excerptSources,result.sources),combinedIndex=combined.index;
-    if(activeCorpus){graphSources=result.sources;sources=combinedIndex.sources;sourceIndex=combinedIndex;snapshotPromise=null;return;}
+    catalogueState={graphs:result.graphs,bounded:!!result.bounded,omitted:combined.omitted,unavailable:false};
+    if(activeCorpus){graphSources=result.sources;sources=combinedIndex.sources;sourceIndex=combinedIndex;snapshotPromise=null;refreshCoverage();return;}
     stop('Public graph source catalogue refreshed.');graphSources=result.sources;sources=combinedIndex.sources;sourceIndex=combinedIndex;snapshotPromise=null;lastExactContext=null;
     matches=[];lastQuery='';results.replaceChildren();
-    const names=result.graphs.map(graph=>graph.label).join(', ');
-    announce(`Search includes selected page sources and public graph catalogue entries${names?` from ${names}`:''}.${result.graphs.some(graph=>graph.status!=='complete')?' One or more graph snapshots are incomplete; absence of a result is not evidence of absence.':''}${result.bounded||combined.omitted?' This panel uses a bounded subset; website search covers all eligible public graphs.':''} Graph summaries aid discovery and are not admitted automatically as reviewed AI evidence.`);
-    refresh();
-  }).catch(()=>{if(!graphController.signal.aborted)announce('Public graph discovery is unavailable. Selected page source search remains available.');});
+    refreshCoverage();announce(`Source search is ready with ${sources.length} selected entries.${coverageWarning.hidden?'':' Read the visible search-coverage warning.'}`);refresh();
+  }).catch(()=>{if(!graphController.signal.aborted){catalogueState.unavailable=true;refreshCoverage();announce('Public graph discovery is unavailable. Selected page source search remains available.');}});
   const ownerDocument=document,providerId='local-ai-generation-'+(++generationSequence);
   const provider={connected:()=>globalThis.document===ownerDocument&&panel.ownerDocument===ownerDocument&&slot.ownerDocument===ownerDocument&&raw.ownerDocument===ownerDocument&&
       panel.isConnected===true&&slot.isConnected===true&&raw.isConnected===true&&
       panel.querySelector(':scope > .local-ai-enhancement')===slot&&panel.querySelector(':scope > script.local-ai-data')===raw&&raw.textContent===rawIdentity,
     status:()=>busy||runtime?.busy?'busy':runtime?.status==='ready'&&runtime.model?.capability==='generate'&&loadedRole==='generate'?'ready':'not-ready',
-    focus:()=>reviewGenerate.focus(),dispose:()=>stop('Local AI released after its panel was removed.',true),
+    focus:()=>focusAI(reviewGenerate),dispose:()=>stop('Local AI released after its panel was removed.',true),
     async generate(packet,options){
       companionCurrent(options);if(!provider.connected()||provider.status()!=='ready')throw generationError('local-ai-generation-provider-not-ready');
       const token=++revision,engine=runtime;activeTask=true;clearProposal();refresh();announce('Drafting an unreviewed proposal for another explicit control on this page. Cancel local AI remains available.');
@@ -370,7 +396,7 @@ function enhance(panel) {
         if(response.proposalRequest?.hashes.requestSha256!==packet.hashes.requestSha256)throw generationError('local-ai-generation-request-mismatch');
         announce('An unreviewed companion proposal was returned to its requesting control. Its original source review still applies.');return response;
       }catch(error){if(refusal)throw generationError(refusal);if(token!==revision)throw generationError('local-ai-generation-cancelled');throw error;}
-      finally{clearInterval(timer);options.signal?.removeEventListener('abort',aborted);if(token===revision){activeTask=false;refresh();}}
+      finally{clearInterval(timer);options.signal?.removeEventListener('abort',aborted);if(token===revision){const returnFocus=document.activeElement===cancel;activeTask=false;refresh();if(returnFocus)query.focus();}}
     }};
   const registerProvider=()=>{if(payload.manifest&&provider.connected())generationProviders.set(providerId,provider);};registerProvider();
   // A page can return from the back/forward cache and load a fresh model. Every

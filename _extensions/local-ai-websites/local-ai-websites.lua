@@ -357,7 +357,7 @@ local function process(doc)
     return el
   end})
   if html then
-    quarto.doc.add_html_dependency({name='local-ai-websites',version='0.0.12',
+    quarto.doc.add_html_dependency({name='local-ai-websites',version='0.0.13',
       scripts={{path='local-ai-websites.js',attribs={type='module'}}},stylesheets={'local-ai-websites.css'},
       resources={'corpus.js','evidence-windows.js','support-review.js','support-review-controls.js','retrieval.js','graphs.js','query-provider.js','query-delivery.js','excerpt-catalogue.js','proposal.js','companion-ui.js','runtime.js','runtime-worker.js','runtime-worker-bootstrap.js','model-store.js','manifest.js'}})
   end
